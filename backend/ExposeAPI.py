@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from LLMInference import LLMInference
+from IngestAudio import AudioIngestor
 
 app = FastAPI()
+audio_ingestor = AudioIngestor()
 
 app.add_middleware(
     CORSMiddleware,
@@ -124,3 +126,30 @@ async def generate_response(request: QueryRequest):
         temperature=request.temperature
     )
     return {"response": response_text}
+
+@app.post("/api/audio/digest")
+async def audio_digest(file : UploadFile = File(...)):
+    file_location = f"temp_{file.name}"
+
+    with open(file_location, "wb") as f:
+        f.write(await file.read())
+    
+    transcribe= audio_ingestor._transcribe_(file_location)
+
+    prompt = """
+
+    Summarize this file in bullet points
+    {transcribe}
+
+    
+    """
+
+    summary = inference.generate(prompt=prompt)
+
+    return{
+        "transcribe" : transcribe,
+        "summary" : summary
+    }
+
+
+    
