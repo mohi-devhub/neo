@@ -2,3 +2,5 @@ fastapi[standard]
 ollama
 requests
 pytesseract
+faiss-cpu
+numpy
