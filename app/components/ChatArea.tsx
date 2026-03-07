@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { marked } from "marked";
 import ScrambledText from "./ScrambledText";
-import { Mic, Image as ImageIcon, Video, FileText, Cpu } from "lucide-react";
+import { Mic, Image as ImageIcon, Video, FileText } from "lucide-react";
 
 marked.use({ gfm: true, breaks: true });
 
@@ -125,12 +125,8 @@ export default function ChatArea({ messages, isStreaming }: ChatAreaProps) {
           );
         })}
 
-        {/* Typing indicator when we're waiting for the first token */}
         {isStreaming && messages.filter(m => m.role !== "system").at(-1)?.role !== "assistant" && (
           <div className="flex gap-3 justify-start">
-            <div className="shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mt-0.5">
-              <Cpu size={14} className="text-primary" />
-            </div>
             <div className="bg-panel border border-panel-border/60 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-muted/60 animate-bounce [animation-delay:0ms]" />
               <span className="w-1.5 h-1.5 rounded-full bg-muted/60 animate-bounce [animation-delay:150ms]" />
