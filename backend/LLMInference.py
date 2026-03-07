@@ -1,6 +1,9 @@
 from typing import Optional
+from concurrent.futures import Future
 
 import ollama
+from shared_executor import executor
+
 
 class LLMInference:
     def __init__(self, llm_name: Optional[str] = None):
@@ -17,7 +20,7 @@ class LLMInference:
         if new_llm_name not in available_models:
             print(f"Pulling model '{new_llm_name}' via Ollama...")
             ollama.pull(new_llm_name)
-            
+
         self.llm_name = new_llm_name
         print(f"Model '{self.llm_name}' ready.")
 
@@ -27,30 +30,36 @@ class LLMInference:
             model_name = model_info.get('model', model_info.get('name', ''))
         elif hasattr(model_info, 'model'):
             model_name = getattr(model_info, 'model', '')
-            
+
         model_name_lower = model_name.lower()
-        
-        # Check explicit keywords in name
-        if any(kw in model_name_lower for kw in ['embed', 'bge-m3']):
+
+        if any(kw in model_name_lower for kw in [
+            'embed', 'bge-m3', 'bge', 'nomic-embed', 'mxbai-embed',
+            'all-minilm', 'all-mpnet', 'minilm', 'e5-', 'gte-',
+            'sentence', 'paraphrase',
+        ]):
             return 'Embedding model'
-        if any(kw in model_name_lower for kw in ['vision', 'llava', 'ocr', 'clip']):
+        if any(kw in model_name_lower for kw in [
+            'vision', 'llava', 'ocr', 'clip', 'minicpm', 'moondream',
+            'bakllava', 'cogvlm', 'glm4v', 'glm-ocr', 'internvl',
+        ]):
             return 'OCR model'
         if any(kw in model_name_lower for kw in ['whisper', 'audio']):
             return 'Audio'
-            
+
         details = None
         if isinstance(model_info, dict):
             details = model_info.get('details', {})
         elif hasattr(model_info, 'details'):
             details = getattr(model_info, 'details', None)
-            
+
         if details:
             family = ""
             if isinstance(details, dict):
                 family = details.get('family', '')
             elif hasattr(details, 'family'):
                 family = getattr(details, 'family', '')
-                
+
             if isinstance(family, str):
                 family_lower = family.lower()
                 if 'embed' in family_lower or family_lower in ['bert', 'nomic-bert']:
@@ -59,10 +68,10 @@ class LLMInference:
                     return 'OCR model'
                 if family_lower == 'whisper':
                     return 'Audio'
-                    
+
         if any(kw in model_name_lower for kw in ['llama', 'mistral', 'gemma', 'phi', 'qwen', 'coder', 'deepseek']):
             return 'LLM'
-            
+
         return 'Other'
 
     def get_available_models(self):
@@ -73,7 +82,7 @@ class LLMInference:
                 models = response.models
             elif isinstance(response, dict) and 'models' in response:
                 models = response['models']
-            
+
             model_names = []
             for m in models:
                 if isinstance(m, dict):
@@ -93,7 +102,7 @@ class LLMInference:
                 models = response.models
             elif isinstance(response, dict) and 'models' in response:
                 models = response['models']
-            
+
             categorized = {
                 "LLM": [],
                 "Embedding model": [],
@@ -101,7 +110,7 @@ class LLMInference:
                 "Audio": [],
                 "Other": []
             }
-            
+
             for m in models:
                 category = self.categorize_model(m)
                 name = ""
@@ -109,12 +118,12 @@ class LLMInference:
                     name = m.get('model', m.get('name', ''))
                 elif hasattr(m, 'model'):
                     name = getattr(m, 'model', '')
-                    
+
                 if name:
                     if category not in categorized:
                         categorized[category] = []
                     categorized[category].append(name)
-            
+
             return categorized
         except Exception as e:
             print(f"Error fetching categorized models from Ollama: {e}")
@@ -130,7 +139,6 @@ class LLMInference:
         if self.llm_name is not None:
             print(f"Unloading model '{self.llm_name}'...")
             try:
-                # Unload model by generating with keep_alive=0
                 ollama.generate(model=self.llm_name, prompt='', keep_alive=0)
             except Exception as e:
                 print(f"Error unloading model: {e}")
@@ -146,16 +154,18 @@ class LLMInference:
         else:
             print(f"Model '{model_name}' deleted.")
 
-    def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7):
+    def generate_async(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> Future:
         if self.llm_name is None:
             raise RuntimeError("No model is currently loaded.")
 
-        response = ollama.generate(
-            model=self.llm_name,
-            prompt=prompt,
-            options={
-                "num_predict": max_tokens,
-                "temperature": temperature,
-            }
-        )
-        return response["response"]
+        model = self.llm_name
+        options = {"num_predict": max_tokens, "temperature": temperature}
+
+        def _call():
+            response = ollama.generate(model=model, prompt=prompt, options=options)
+            return response["response"]
+
+        return executor.submit(_call)
+
+    def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> str:
+        return self.generate_async(prompt, max_tokens, temperature).result()

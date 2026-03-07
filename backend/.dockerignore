@@ -1,0 +1,7 @@
+__pycache__
+.venv
+data
+*.db
+*.db-shm
+*.db-wal
+.registry.json

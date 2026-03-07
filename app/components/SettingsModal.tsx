@@ -30,9 +30,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </button>
         </div>
         
-        {/* Modal Content */}
         <div className="flex-1 overflow-y-auto px-6 py-8 flex flex-col gap-8 no-scrollbar">
-          {/* Infrastructure Selection */}
           <section className="flex flex-col gap-6">
             <div>
               <h3 className="text-lg font-semibold text-foreground mb-1">Infrastructure Providers</h3>
@@ -41,7 +39,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-background/20 p-5 rounded-2xl border border-panel-border/40">
               
-              {/* LLM Inference Provider */}
               <div className="flex flex-col gap-3">
                 <h4 className="text-sm font-semibold text-foreground/90">LLM Inference</h4>
                 <div className="grid grid-cols-2 gap-2">
@@ -97,7 +94,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </div>
               </div>
 
-              {/* Storage Bucket */}
               <div className="flex flex-col gap-3">
                 <h4 className="text-sm font-semibold text-foreground/90">Storage Bucket</h4>
                 <div className="grid grid-cols-2 gap-2">
@@ -125,7 +121,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </div>
               </div>
 
-              {/* Vector DB */}
               <div className="flex flex-col gap-3">
                 <h4 className="text-sm font-semibold text-foreground/90">Vector Database</h4>
                 <div className="grid grid-cols-2 gap-2">
@@ -217,7 +212,6 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </section>
         </div>
 
-        {/* Modal Footer */}
         <div className="px-6 py-5 border-t border-panel-border/40 bg-background/10 flex justify-end gap-3 backdrop-blur-md">
           <button 
             onClick={onClose}

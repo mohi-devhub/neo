@@ -41,3 +41,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# neo-files
+backend/data/neo_chat.db-shm
+backend/data/neo_chat.db-wal
+backend/data/neo_chat.db
+backend/data/faiss_index.bin
