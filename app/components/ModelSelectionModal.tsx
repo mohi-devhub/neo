@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Cpu, DownloadCloud, Database, RefreshCcw, TrendingUp, Trash2, Mic, Eye } from "lucide-react";
+import { X, Cpu, DownloadCloud, Database, RefreshCcw, TrendingUp, Trash2, Mic, Eye, PowerOff } from "lucide-react";
 import { SlotName, SlotStatus } from "./ModelBar";
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000';
 const WHISPER_MODELS = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"];
 
 const SLOT_DISPLAY = [
@@ -117,7 +117,11 @@ export default function ModelSelectionModal({
             try {
               const d = JSON.parse(line);
               if (d.status === 'error') throw new Error(d.message);
-              if (d.status === 'success') { setPullProgress(null); return; }
+              if (d.status === 'success') {
+                setPullProgress(null);
+                await onMount(targetSlot ?? inferSlot(modelName, categorizedModels), modelName);
+                return;
+              }
               setPullProgress(d);
             } catch (e) {
               if (e instanceof Error && !e.message.startsWith('Unexpected')) throw e;
@@ -167,6 +171,8 @@ export default function ModelSelectionModal({
     e.stopPropagation();
     if (!confirm(`Delete ${modelName} from cache?`)) return;
     try {
+      setLoading(true);
+      setError(null);
       const res = await fetch(`${API_BASE_URL}/api/whisper/models/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -177,6 +183,17 @@ export default function ModelSelectionModal({
       await fetchModels();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete ASR model.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const unmountAll = async () => {
+    const activeSlots = (Object.entries(slots) as [SlotName, string | null][])
+      .filter(([, v]) => v !== null)
+      .map(([slot]) => slot);
+    for (const slot of activeSlots) {
+      await onUnmount(slot);
     }
   };
 
@@ -248,7 +265,20 @@ export default function ModelSelectionModal({
 
           {/* ---- Mounted Slots ---- */}
           <section className="flex flex-col gap-2">
-            <h3 className="text-[10px] font-bold text-muted uppercase tracking-wider px-1">Slots</h3>
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-[10px] font-bold text-muted uppercase tracking-wider">Slots</h3>
+              {Object.values(slots).some(Boolean) && (
+                <button
+                  onClick={unmountAll}
+                  disabled={busySlot !== null}
+                  className="flex items-center gap-1 text-[10px] font-semibold text-red-500/70 hover:text-red-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Unmount all models"
+                >
+                  <PowerOff size={10} />
+                  Unmount all
+                </button>
+              )}
+            </div>
             <div className="flex flex-col gap-1.5">
               {SLOT_DISPLAY.map(({ slot, label, Icon }) => {
                 const active = slots[slot];
@@ -328,7 +358,7 @@ export default function ModelSelectionModal({
                           className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-bold uppercase cursor-pointer hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 group/active"
                         >
                           <span className="group-hover/active:hidden">Active</span>
-                          <span className="hidden group-hover/active:inline">Unload</span>
+                          <span className="hidden group-hover/active:inline">unmount</span>
                         </div>
                       ) : (
                         <span

@@ -1,0 +1,51 @@
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: neo-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        REPO: https://github.com/harryfrzzi/neo.git
+        BRANCH: main
+    container_name: neo-backend
+    volumes:
+      - backend_data:/app/backend/data
+      - whisper_cache:/root/.cache/whisper
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        REPO: https://github.com/harryfrzzi/neo.git
+        BRANCH: main
+        # Points the browser at the host's port 8000 — works for local use.
+        # Override with the server's public URL when deploying remotely.
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
+    container_name: neo-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  backend_data:
+  whisper_cache:

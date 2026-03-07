@@ -14,6 +14,70 @@ class EmbeddingPipeline:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
+    def chunk_segments(
+        self,
+        segments: List[Dict],
+        source: str,
+        category: str = "video_transcript",
+        max_chars: int = 500,
+    ) -> List[Dict]:
+        """
+        Group Whisper transcript segments into chunks that fit within max_chars,
+        preserving start_time / end_time on every chunk.
+
+        Each Whisper segment has at minimum: {"start": float, "end": float, "text": str}.
+        """
+        chunks = []
+        doc_id = str(uuid.uuid4())
+        chunk_num = 0
+
+        current_texts: List[str] = []
+        current_start: float = 0.0
+        current_end: float = 0.0
+        current_len: int = 0
+
+        def _flush():
+            nonlocal chunk_num
+            text = " ".join(current_texts).strip()
+            if text:
+                chunks.append({
+                    "text": text,
+                    "chunk_id": f"{doc_id}_chunk_{chunk_num}",
+                    "doc_id": doc_id,
+                    "source": source,
+                    "category": category,
+                    "start_time": current_start,
+                    "end_time": current_end,
+                    "created_at": datetime.utcnow().isoformat(),
+                })
+                chunk_num += 1
+
+        for seg in segments:
+            seg_text = seg.get("text", "").strip()
+            if not seg_text:
+                continue
+            seg_start = float(seg.get("start", 0))
+            seg_end   = float(seg.get("end", seg_start))
+
+            if current_len + len(seg_text) > max_chars and current_texts:
+                _flush()
+                current_texts = []
+                current_start = seg_start
+                current_end   = seg_end
+                current_len   = 0
+
+            if not current_texts:
+                current_start = seg_start
+            current_texts.append(seg_text)
+            current_end = seg_end
+            current_len += len(seg_text)
+
+        if current_texts:
+            _flush()
+
+        print(f"Created {len(chunks)} timestamped chunks from {source} (category={category})")
+        return chunks
+
     def chunk_text(self, text: str, doc_id: str, source: str, category: str = "document") -> List[Dict]:
         chunks = []
         start = 0
@@ -40,11 +104,6 @@ class EmbeddingPipeline:
         return chunks
 
     def embed_async(self, text: str) -> Future:
-        """
-        Submit a single embedding call to the shared executor and return a
-        Future.  Callers can submit many of these before calling .result(),
-        allowing all chunks to embed concurrently alongside LLM / OCR calls.
-        """
         model = self.embedding_model
 
         def _call():
@@ -58,10 +117,6 @@ class EmbeddingPipeline:
         return executor.submit(_call)
 
     def generate_embeddings(self, texts: List[str]) -> np.ndarray:
-        """
-        Embed all chunks in parallel: submit every chunk at once to the
-        shared executor, then collect results in order.
-        """
         if not texts:
             return np.array([], dtype=np.float32)
 
@@ -76,13 +131,6 @@ class EmbeddingPipeline:
         return np.array(embeddings, dtype=np.float32)
 
     def process_document_async(self, text: str, source: str, category: str = "document") -> Tuple[List[Dict], List[Future]]:
-        """
-        Chunk the text and immediately submit all embedding calls to the
-        shared executor.  Returns (chunks, futures) so the caller can do
-        other work (e.g. run the LLM) while embeddings are in-flight.
-
-        Call collect_embeddings(futures) when you need the numpy array.
-        """
         doc_id = str(uuid.uuid4())
         chunks = self.chunk_text(text, doc_id, source, category=category)
 
@@ -94,13 +142,11 @@ class EmbeddingPipeline:
 
     @staticmethod
     def collect_embeddings(futures: List[Future]) -> np.ndarray:
-        """Resolve a list of embed futures (in order) into a numpy array."""
         if not futures:
             return np.array([], dtype=np.float32)
         return np.array([f.result() for f in futures], dtype=np.float32)
 
     def process_document(self, text: str, source: str, category: str = "document") -> Tuple[List[Dict], np.ndarray]:
-        """Blocking convenience wrapper — used by callers that don't need parallelism."""
         chunks, futures = self.process_document_async(text, source, category=category)
         embeddings = self.collect_embeddings(futures)
         return chunks, embeddings

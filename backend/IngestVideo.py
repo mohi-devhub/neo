@@ -1,96 +1,65 @@
-import torch
-import cv2
-from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
-import numpy as np
+import os
+import subprocess
+import tempfile
+from typing import Optional
 
 
 class VideoIngestor:
 
-    def __init__(self, model_name=None):
-        self.model = None
-        self.processor = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_name = None
+    def extract_audio(self, video_path: str, output_path: Optional[str] = None) -> str:
+        if output_path is None:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            output_path = tmp.name
+            tmp.close()
 
-        if model_name:
-            self.load_model(model_name)
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-vn",
+            "-acodec", "pcm_s16le",
+            "-ar", "16000",
+            "-ac", "1",
+            output_path,
+        ]
 
-    def load_model(self, model_name="openai/clip-vit-base-patch32"):
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        if self.model_name == model_name and self.model is not None:
-            return
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ffmpeg audio extraction failed: {result.stderr.decode(errors='replace')}"
+            )
 
-        self.model = CLIPModel.from_pretrained(model_name).to(self.device)
-        self.processor = CLIPProcessor.from_pretrained(model_name)
+        return output_path
 
-        self.model_name = model_name
+    def process_video_with_audio(
+        self,
+        video_path: str,
+        filename: str,
+        audio_ingestor,
+        language: Optional[str] = None,
+    ):
+        """
+        Returns:
+            transcript          (str)
+            transcript_segments (list of Whisper segment dicts with start_time/end_time)
+        """
+        transcript = ""
+        transcript_segments = []
 
-    def unload_model(self):
+        if audio_ingestor is not None and audio_ingestor.model is not None:
+            audio_path = None
+            try:
+                audio_path = self.extract_audio(video_path)
+                result = audio_ingestor.transcribe(audio_path, language=language)
+                transcript = str(result.get("text", ""))
+                transcript_segments = result.get("segments", [])
+            except Exception as e:
+                print(f"[VideoIngestor] audio transcription failed (non-fatal): {e}")
+            finally:
+                if audio_path and os.path.exists(audio_path):
+                    try:
+                        os.unlink(audio_path)
+                    except OSError:
+                        pass
 
-        self.model = None
-        self.processor = None
-        self.model_name = None
-
-    def extract_frames(self, video_path, frame_interval=30):
-
-        cap = cv2.VideoCapture(video_path)
-
-        frames = []
-        timestamps = []
-        frame_id = 0
-
-        while True:
-
-            ret, frame = cap.read()
-
-            if not ret:
-                break
-
-            if frame_id % frame_interval == 0:
-                frames.append(frame)
-                timestamps.append(cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
-
-            frame_id += 1
-
-        cap.release()
-
-        return frames, timestamps
-
-    def embed_frames(self, frames):
-
-        if self.model is None:
-            raise RuntimeError("No CLIP model loaded")
-
-        embeddings = []
-
-        for frame in frames:
-
-            image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-            inputs = self.processor(images=image, return_tensors="pt").to(self.device)
-
-            with torch.no_grad():
-                features = self.model.get_image_features(**inputs)
-
-            embeddings.append(features.cpu().numpy()[0])
-
-        return np.array(embeddings)
-
-    def process_video(self, video_path, filename):
-
-        frames, timestamps = self.extract_frames(video_path)
-
-        embeddings = self.embed_frames(frames)
-
-        chunks = []
-
-        for i, ts in enumerate(timestamps):
-
-            chunks.append({
-                "doc_id": filename,
-                "timestamp": ts,
-                "type": "video_frame"
-            })
-
-        return chunks, embeddings
+        return transcript, transcript_segments

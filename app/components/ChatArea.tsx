@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import { marked } from "marked";
 import ScrambledText from "./ScrambledText";
-import { Mic, Image as ImageIcon, Video, FileText, FolderOpen, Cpu } from "lucide-react";
+import { Mic, Image as ImageIcon, Video, FileText, Cpu } from "lucide-react";
+
+marked.use({ gfm: true, breaks: true });
 
 export interface Message {
   id: string;
@@ -67,7 +70,7 @@ export default function ChatArea({ messages, isStreaming }: ChatAreaProps) {
                   </span>
                   {item.name === "Video" && (
                     <span className="absolute -top-2 -right-2 text-[9px] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full px-1.5 py-0.5 leading-none">
-                      in development
+                      Beta
                     </span>
                   )}
                 </button>
@@ -102,19 +105,22 @@ export default function ChatArea({ messages, isStreaming }: ChatAreaProps) {
             className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
 
-            <div
-              className={`relative max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-br-sm"
-                  : "bg-panel border border-panel-border/60 text-foreground rounded-bl-sm"
-              }`}
-            >
-              {msg.content}
-              {/* Blinking cursor while streaming */}
-              {msg.streaming && (
-                <span className="inline-block w-[2px] h-[1em] bg-current ml-0.5 align-middle animate-pulse" />
-              )}
-            </div>
+            {msg.role === "user" ? (
+              <div className="relative max-w-[80%] px-4 py-3 rounded-2xl rounded-br-sm text-sm leading-relaxed whitespace-pre-wrap break-words bg-primary text-primary-foreground">
+                {msg.content}
+              </div>
+            ) : (
+              <div className="relative max-w-[80%] px-4 py-3 rounded-2xl rounded-bl-sm text-sm leading-relaxed bg-panel border border-panel-border/60 text-foreground">
+                <div
+                  className="prose-msg"
+                  dangerouslySetInnerHTML={{ __html: marked.parse(msg.content) as string }}
+                />
+                {/* Blinking cursor while streaming */}
+                {msg.streaming && (
+                  <span className="inline-block w-[2px] h-[1em] bg-current ml-0.5 align-middle animate-pulse" />
+                )}
+              </div>
+            )}
           </div>
           );
         })}

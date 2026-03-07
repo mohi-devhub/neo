@@ -1,16 +1,13 @@
 "use client";
 
-import React from "react";
-import { X, CheckCircle2, AlertCircle, Loader2, Music, Image, FileText, File, Copy } from "lucide-react";
-
-// ---- Types -----------------------------------------------------------------
+import { X, CheckCircle2, AlertCircle, Loader2, Music, Image, FileText, File, Video } from "lucide-react";
 
 export type IngestFileStatus = "pending" | "processing" | "done" | "error" | "duplicate" | "skipped";
 
 export interface IngestFileEntry {
   id: string;
   name: string;
-  category: "audio" | "image" | "text" | "pdf" | "unknown";
+  category: "audio" | "image" | "text" | "pdf" | "video" | "unknown";
   status: IngestFileStatus;
   detail?: string;
   chunks?: number;
@@ -20,17 +17,16 @@ interface IngestionProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
   files: IngestFileEntry[];
-  /** 0–100 */
   overallProgress: number;
   isDone: boolean;
 }
 
-// ---- Helpers ---------------------------------------------------------------
 
 function CategoryIcon({ category }: { category: IngestFileEntry["category"] }) {
   const cls = "shrink-0";
   switch (category) {
     case "audio":   return <Music    size={15} className={`${cls} text-violet-400`} />;
+    case "video":   return <Video    size={15} className={`${cls} text-pink-400`} />;
     case "image":   return <Image    size={15} className={`${cls} text-sky-400`} />;
     case "text":    return <FileText size={15} className={`${cls} text-emerald-400`} />;
     case "pdf":     return <FileText size={15} className={`${cls} text-orange-400`} />;
@@ -79,8 +75,6 @@ function statusLabel(entry: IngestFileEntry): { text: string; colour: string } {
   }
 }
 
-// ---- Component -------------------------------------------------------------
-
 export default function IngestionProgressModal({
   isOpen,
   onClose,
@@ -95,13 +89,11 @@ export default function IngestionProgressModal({
   const total      = files.length;
 
   return (
-    /* Backdrop */
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
       <div
         className="relative w-full max-w-lg mx-4 bg-panel border border-panel-border rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <div>
             <h2 className="text-base font-semibold text-foreground">
@@ -121,7 +113,6 @@ export default function IngestionProgressModal({
           </button>
         </div>
 
-        {/* Overall progress bar */}
         <div className="px-5 pb-3">
           <div className="w-full bg-accent/60 rounded-full h-2 overflow-hidden">
             <div
@@ -143,7 +134,6 @@ export default function IngestionProgressModal({
           </div>
         </div>
 
-        {/* Per-file list */}
         <div className="px-3 pb-4 max-h-72 overflow-y-auto scrollbar-thin">
           <div className="flex flex-col gap-1">
             {files.map((entry) => {
@@ -171,7 +161,6 @@ export default function IngestionProgressModal({
           </div>
         </div>
 
-        {/* Footer */}
         {isDone && (
           <div className="px-5 pb-5 pt-1 flex justify-end">
             <button

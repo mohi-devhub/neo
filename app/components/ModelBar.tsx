@@ -1,14 +1,4 @@
 "use client";
-
-/**
- * ModelBar — four independent model-slot chips displayed in the header.
- *
- * Each chip shows: slot label + active model name (or "—").
- * Clicking a chip opens a small inline popover listing all downloaded models
- * for that category so the user can mount / unmount without opening the
- * full ModelSelectionModal.
- */
-
 import React, { useRef, useEffect, useState } from "react";
 import { Cpu, Database, Eye, Mic, ChevronDown, RefreshCw, Check, X } from "lucide-react";
 
@@ -23,17 +13,12 @@ export interface SlotStatus {
 
 interface ModelBarProps {
   slots: SlotStatus;
-  /** All Ollama models, bucketed by category */
   categorizedModels: Record<string, string[]>;
-  /** Downloaded Whisper model names */
   asrModels: string[];
   onMount:   (slot: SlotName, model: string) => Promise<void>;
   onUnmount: (slot: SlotName) => Promise<void>;
-  /** True while any mount/unmount request is in-flight */
   busySlot: SlotName | null;
 }
-
-// ---- slot metadata --------------------------------------------------------
 
 const SLOT_META: { slot: SlotName; label: string; category: string; Icon: React.ElementType }[] = [
   { slot: "llm",   label: "LLM",    category: "LLM",             Icon: Cpu      },
@@ -41,8 +26,6 @@ const SLOT_META: { slot: SlotName; label: string; category: string; Icon: React.
   { slot: "ocr",   label: "OCR",    category: "OCR model",       Icon: Eye      },
   { slot: "asr",   label: "ASR",    category: "__asr__",         Icon: Mic      },
 ];
-
-// ---- component ------------------------------------------------------------
 
 export default function ModelBar({
   slots,
@@ -123,14 +106,6 @@ export default function ModelBar({
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
                     {label} model
                   </span>
-                  {active && (
-                    <button
-                      onClick={() => { onUnmount(slot); setOpenSlot(null); }}
-                      className="ml-2 text-[10px] text-red-400 hover:text-red-300 font-medium"
-                    >
-                      unmount
-                    </button>
-                  )}
                 </div>
 
                 {candidates.length === 0 ? (
@@ -163,7 +138,7 @@ export default function ModelBar({
                             <div className="flex items-center gap-1.5">
                               <span className="text-[9px] uppercase font-bold text-emerald-400 group-hover:hidden">active</span>
                               <span className="hidden group-hover:flex items-center gap-1 text-[9px] uppercase font-bold text-red-400">
-                                <X size={9} /> unload
+                                <X size={9} /> unmount
                               </span>
                             </div>
                           ) : (

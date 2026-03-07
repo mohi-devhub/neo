@@ -1,0 +1,19 @@
+# Frontend build context — root Dockerfile
+.git
+.next
+node_modules
+backend
+.DS_Store
+*.pem
+npm-debug.log*
+.env*
+
+# Backend build context — backend/Dockerfile
+# (backend/ is the build context so these are relative to backend/)
+__pycache__
+.venv
+data
+*.db
+*.db-shm
+*.db-wal
+.registry.json

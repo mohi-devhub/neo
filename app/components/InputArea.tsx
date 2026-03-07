@@ -1,11 +1,10 @@
 "use client";
 
 import React, { useRef, useEffect } from "react";
-import { Paperclip, FolderOpen, ArrowUp, X, Folder, StopCircle, Music, Image, FileText, File } from "lucide-react";
+import { Paperclip, FolderOpen, ArrowUp, X, StopCircle, Music, Image, FileText, File, Video } from "lucide-react";
 
-// ---- Types -----------------------------------------------------------------
 
-export type FileCategory = "audio" | "image" | "text" | "pdf" | "unknown";
+export type FileCategory = "audio" | "image" | "text" | "pdf" | "video" | "unknown";
 export type FileStatus = "idle" | "uploading" | "done" | "error";
 
 export interface AttachedFile {
@@ -14,28 +13,21 @@ export interface AttachedFile {
   category: FileCategory;
   status: FileStatus;
   file: File;
-  /** Short result detail returned by the backend (e.g. first 200 chars of transcript) */
   detail?: string;
-  /** Number of vector-store chunks created */
   chunks?: number;
 }
 
 interface InputAreaProps {
   message: string;
   setMessage: (message: string) => void;
-  /** Called when the user hits send. Files (if any) are already categorised; the
-   *  parent is responsible for uploading them before calling the LLM. */
   onSendMessage: (text: string, files: AttachedFile[]) => void;
   isStreaming: boolean;
   onStopStreaming: () => void;
-  /** Called when the user picks a folder via the folder button.
-   *  The parent handles ingestion + progress UI — files are NOT queued as pills. */
   onFolderIngest?: (files: File[]) => void;
 }
 
-// ---- Helpers ---------------------------------------------------------------
-
 const AUDIO_EXTS = new Set([".mp3", ".wav", ".m4a", ".ogg", ".flac"]);
+const VIDEO_EXTS = new Set([".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"]);
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff"]);
 const TEXT_EXTS  = new Set([".txt", ".md"]);
 const PDF_EXTS   = new Set([".pdf"]);
@@ -43,6 +35,7 @@ const PDF_EXTS   = new Set([".pdf"]);
 function categorise(filename: string): FileCategory {
   const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
   if (AUDIO_EXTS.has(ext)) return "audio";
+  if (VIDEO_EXTS.has(ext)) return "video";
   if (IMAGE_EXTS.has(ext)) return "image";
   if (TEXT_EXTS.has(ext))  return "text";
   if (PDF_EXTS.has(ext))   return "pdf";
@@ -53,6 +46,7 @@ function CategoryIcon({ category }: { category: FileCategory }) {
   const cls = "shrink-0";
   switch (category) {
     case "audio":   return <Music     size={14} className={`${cls} text-violet-400`} />;
+    case "video":   return <Video     size={14} className={`${cls} text-pink-400`} />;
     case "image":   return <Image     size={14} className={`${cls} text-sky-400`} />;
     case "text":    return <FileText  size={14} className={`${cls} text-emerald-400`} />;
     case "pdf":     return <FileText  size={14} className={`${cls} text-orange-400`} />;
@@ -73,8 +67,6 @@ const STATUS_LABEL: Record<FileStatus, string | null> = {
   done:      null,
   error:     "error",
 };
-
-// ---- Component -------------------------------------------------------------
 
 export default function InputArea({
   message,
@@ -132,10 +124,8 @@ export default function InputArea({
     if (e.target.files && e.target.files.length > 0) {
       const picked = Array.from(e.target.files);
       if (onFolderIngest) {
-        // Hand off to parent — it will show the ingestion progress modal
         onFolderIngest(picked);
       } else {
-        // Fallback: queue as normal attached pills
         const newItems: AttachedFile[] = picked.map((file) => ({
           id: Math.random().toString(36).slice(2) + Date.now().toString(36),
           name: file.name,
@@ -159,7 +149,6 @@ export default function InputArea({
     <div className="w-full pb-8 pt-2 px-4 sm:px-0 z-10">
       <div className="max-w-3xl mx-auto relative flex flex-col gap-3">
 
-        {/* Attached file pills */}
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-2 px-2">
             {attachedFiles.map((item) => (
@@ -181,7 +170,6 @@ export default function InputArea({
                     {item.chunks} chunk{item.chunks !== 1 ? "s" : ""}
                   </span>
                 )}
-                {/* Only allow removal when not mid-upload */}
                 {item.status !== "uploading" && (
                   <button
                     onClick={() => removeFile(item.id)}

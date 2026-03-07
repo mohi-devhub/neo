@@ -4,3 +4,6 @@ requests
 pytesseract
 faiss-cpu
 numpy
+pillow
+pdfplumber
+openai-whisper

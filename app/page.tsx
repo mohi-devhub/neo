@@ -5,20 +5,18 @@ import { Menu, Settings } from "lucide-react";
 
 import Sidebar from "./components/Sidebar";
 import InputArea, { AttachedFile } from "./components/InputArea";
-import SettingsModal from "./components/SettingsModal";
 import ChatArea, { Message } from "./components/ChatArea";
 import ModelSelectionModal from "@/app/components/ModelSelectionModal";
 import ModelBar, { SlotName, SlotStatus } from "./components/ModelBar";
 import IngestionProgressModal, { IngestFileEntry } from "./components/IngestionProgressModal";
 import { ChatSession, DBMessage } from "./types/chat";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 const EMPTY_SLOTS: SlotStatus = { llm: null, embed: null, ocr: null, asr: null };
 
-/** Convert a DB message row into the in-memory Message shape used by ChatArea */
 function dbMsgToUiMsg(m: DBMessage): Message {
   return {
     id: `db-${m.id}`,
@@ -34,7 +32,6 @@ export default function Home() {
   const [isModelSidebarOpen, setIsModelSidebarOpen] = useState(false);
   const [message, setMessage] = useState("");
 
-  // ---- model state --------------------------------------------------------
   const [slots, setSlots] = useState<SlotStatus>(EMPTY_SLOTS);
   const [busySlot, setBusySlot] = useState<SlotName | null>(null);
   const [categorizedModels, setCategorizedModels] = useState<Record<string, string[]>>({});
@@ -59,9 +56,6 @@ export default function Home() {
   const [ingestProgress, setIngestProgress]       = useState(0);
   const [ingestDone, setIngestDone]               = useState(false);
 
-  // -------------------------------------------------------------------------
-  // Model data fetching
-  // -------------------------------------------------------------------------
 
   const fetchModels = useCallback(async () => {
     try {
@@ -88,9 +82,6 @@ export default function Home() {
     return () => clearInterval(id);
   }, [fetchModels]);
 
-  // -------------------------------------------------------------------------
-  // Session management
-  // -------------------------------------------------------------------------
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -125,7 +116,6 @@ export default function Home() {
     }
   }, []);
 
-  /** Load a session's messages from the DB and switch to it. */
   const handleSelectSession = useCallback(async (session: ChatSession) => {
     if (session.id === activeSessionId) return;
     setActiveSessionId(session.id);
@@ -177,10 +167,6 @@ export default function Home() {
     }
   }, [fetchSessions]);
 
-  /**
-   * Ensure there's an active session before sending a message.
-   * Creates one on-the-fly if needed.
-   */
   const ensureActiveSession = useCallback(async (): Promise<number | null> => {
     if (activeSessionId !== null) return activeSessionId;
     try {
@@ -199,8 +185,6 @@ export default function Home() {
     }
   }, [activeSessionId]);
 
-  // Update the sessions list when a session title auto-changes (from the
-  // backend auto-title feature). Poll lightly only while a session is active.
   useEffect(() => {
     if (!activeSessionId) return;
     const id = setTimeout(() => {
@@ -268,12 +252,9 @@ export default function Home() {
     }
   }, []);
 
-  // -------------------------------------------------------------------------
-  // Folder ingestion — processes files one-by-one with live progress UI
-  // -------------------------------------------------------------------------
-
   const SUPPORTED_EXTS = new Set([
     ".mp3", ".wav", ".m4a", ".ogg", ".flac",
+    ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v",
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff",
     ".txt", ".md",
     ".pdf",
@@ -282,6 +263,7 @@ export default function Home() {
   function fileCategory(name: string): IngestFileEntry["category"] {
     const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
     if ([".mp3",".wav",".m4a",".ogg",".flac"].includes(ext))              return "audio";
+    if ([".mp4",".mov",".avi",".mkv",".webm",".m4v"].includes(ext))       return "video";
     if ([".png",".jpg",".jpeg",".gif",".webp",".bmp",".tiff"].includes(ext)) return "image";
     if ([".txt",".md"].includes(ext))                                     return "text";
     if (ext === ".pdf")                                                   return "pdf";
@@ -291,7 +273,6 @@ export default function Home() {
   const handleFolderIngest = async (pickedFiles: File[]) => {
     const sid = await ensureActiveSession();
 
-    // Build initial entry list — unknown/unsupported go straight to "skipped"
     const entries: IngestFileEntry[] = pickedFiles.map((f) => {
       const ext = f.name.slice(f.name.lastIndexOf(".")).toLowerCase();
       const supported = SUPPORTED_EXTS.has(ext);
@@ -311,7 +292,6 @@ export default function Home() {
     const supportedEntries = entries.filter((e) => e.status !== "skipped");
     const total = supportedEntries.length;
 
-    // Accumulated context/info to inject into the chat after all files finish
     const allContextMessages: Message[] = [];
     const allInfoMessages:    Message[] = [];
     const allTranscriptMessages: Message[] = [];
@@ -320,7 +300,6 @@ export default function Home() {
       const entry = entries[i];
       if (entry.status === "skipped") continue;
 
-      // Mark as processing
       setIngestFiles((prev) =>
         prev.map((e) => (e.id === entry.id ? { ...e, status: "processing" } : e))
       );
@@ -356,19 +335,17 @@ export default function Home() {
           )
         );
 
-        // Build chat messages for this file
-        const icon = r.category === "audio" ? "🎵" : r.category === "image" ? "🖼" : r.category === "pdf" ? "📋" : r.category === "text" ? "📄" : "📎";
         const hasText = r.text && r.text.trim().length > 0;
         const infoBody =
           r.status === "error"
-            ? `${icon} **${r.filename}** — error: ${r.detail}`
+            ? `**${r.filename}** — error: ${r.detail}`
             : r.status === "duplicate"
-            ? `${icon} **${r.filename}** — already in knowledge base (${r.chunks} chunk${r.chunks !== 1 ? "s" : ""}), skipped re-embedding`
+            ? `**${r.filename}** — already in knowledge base (${r.chunks} chunk${r.chunks !== 1 ? "s" : ""}), skipped re-embedding`
             : r.chunks > 0
-            ? `${icon} **${r.filename}** — ${r.chunks} chunk${r.chunks !== 1 ? "s" : ""} embedded`
+            ? `**${r.filename}** — ${r.chunks} chunk${r.chunks !== 1 ? "s" : ""} embedded`
             : hasText
-            ? `${icon} **${r.filename}** — text extracted, added to context`
-            : `${icon} **${r.filename}** — no text could be extracted`;
+            ? `**${r.filename}** — text extracted, added to context`
+            : `**${r.filename}** — no text could be extracted`;
 
         allInfoMessages.push({ id: uid(), role: "system" as const, content: infoBody });
 
@@ -395,7 +372,7 @@ export default function Home() {
         allInfoMessages.push({
           id: uid(),
           role: "system" as const,
-          content: `📎 **${entry.name}** — error: ${detail}`,
+          content: `**${entry.name}** — error: ${detail}`,
         });
       }
 
@@ -457,18 +434,17 @@ export default function Home() {
 
         const infoMessages: Message[] = (ingestData.results ?? []).map(
           (r: { filename: string; category: string; status: string; chunks: number; detail: string; text?: string }) => {
-            const icon = r.category === "audio" ? "🎵" : r.category === "image" ? "🖼" : r.category === "pdf" ? "📋" : r.category === "text" ? "📄" : "📎";
             const hasText = r.text && r.text.trim().length > 0;
             const body =
               r.status === "error"
-                ? `${icon} **${r.filename}** — error: ${r.detail}`
+                ? `**${r.filename}** — error: ${r.detail}`
                 : r.status === "duplicate"
-                ? `${icon} **${r.filename}** — already in knowledge base (${r.chunks} chunk${r.chunks !== 1 ? "s" : ""}), skipped re-embedding`
+                ? `**${r.filename}** — already in knowledge base (${r.chunks} chunk${r.chunks !== 1 ? "s" : ""}), skipped re-embedding`
                 : r.chunks > 0
-                ? `${icon} **${r.filename}** — ${r.chunks} chunk${r.chunks !== 1 ? "s" : ""} embedded`
+                ? `**${r.filename}** — ${r.chunks} chunk${r.chunks !== 1 ? "s" : ""} embedded`
                 : hasText
-                ? `${icon} **${r.filename}** — text extracted, added to context`
-                : `${icon} **${r.filename}** — no text could be extracted`;
+                ? `**${r.filename}** — text extracted, added to context`
+                : `**${r.filename}** — no text could be extracted`;
             return { id: uid(), role: "system" as const, content: body };
           }
         );
@@ -638,7 +614,6 @@ export default function Home() {
         onRenameSession={handleRenameSession}
       />
 
-      {/* Hamburger — outside the scaled div so it never shrinks */}
       <div className="absolute top-4 left-4 z-30" style={{ left: isSidebarOpen ? "calc(260px + 1.75rem)" : "1rem", transition: "left 300ms cubic-bezier(0.16,1,0.3,1)" }}>
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -648,7 +623,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Settings gear — outside the scaled div so it never shrinks/dims */}
       <div
         className="absolute top-4 right-4 z-30"
         style={{
@@ -665,7 +639,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Main content — scales back when either sidebar opens to create depth */}
       <div
         className={`flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isSidebarOpen || isModelSidebarOpen
@@ -687,13 +660,10 @@ export default function Home() {
         }
       >
 
-        {/* Top Navigation Header */}
         <header className="absolute top-0 w-full flex items-center justify-between px-4 py-4 z-20 bg-gradient-to-b from-background via-background/80 to-transparent pointer-events-none">
 
-          {/* Left — spacer where hamburger was */}
           <div className="w-9 h-9" />
 
-          {/* Centre — 4 model-slot chips */}
           <div className="pointer-events-auto">
             <ModelBar
               slots={slots}
@@ -705,14 +675,11 @@ export default function Home() {
             />
           </div>
 
-          {/* Right — spacer where gear was */}
           <div className="w-9 h-9" />
         </header>
 
-        {/* Chat */}
         <ChatArea messages={messages} isStreaming={isStreaming} />
 
-        {/* Input */}
         <InputArea
           message={message}
           setMessage={setMessage}
